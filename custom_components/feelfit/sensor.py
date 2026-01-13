@@ -122,21 +122,27 @@ async def async_setup_entry(
         if user_info:
             entities.append(
                 FeelfitUserSensor(
-                    coordinator, entry.entry_id, f"{prefix}account_name",
+                    coordinator, entry.entry_id,
+                    f"{prefix}account_name",
+                    "account_name",
                     f"{display_prefix}Account Name", None, profile_user_id
                 )
             )
             if user_info.get("weight") is not None:
                 entities.append(
                     FeelfitUserSensor(
-                        coordinator, entry.entry_id, f"{prefix}weight",
+                        coordinator, entry.entry_id,
+                        f"{prefix}weight",
+                        "weight",
                         f"{display_prefix}Weight", KG_UNIT, profile_user_id
                     )
                 )
             if user_info.get("height") is not None:
                 entities.append(
                     FeelfitUserSensor(
-                        coordinator, entry.entry_id, f"{prefix}height",
+                        coordinator, entry.entry_id,
+                        f"{prefix}height",
+                        "height",
                         f"{display_prefix}Height", "cm", profile_user_id
                     )
                 )
@@ -144,25 +150,40 @@ async def async_setup_entry(
                 entities.append(
                     FeelfitBirthdaySensor(
                         coordinator, entry.entry_id, f"{prefix}birthday",
+                        "birthday",
                         f"{display_prefix}Birthday", profile_user_id
                     )
                 )
             if user_info.get("email"):
                 entities.append(
                     FeelfitUserSensor(
-                        coordinator, entry.entry_id, f"{prefix}email",
+                        coordinator, entry.entry_id,
+                        f"{prefix}email",
+                        "email",
                         f"{display_prefix}Email", None, profile_user_id
                     )
                 )
 
         goals_payload = profile_data.get("goals") or {}
         goals_list = goals_payload.get("goals") or []
+        _LOGGER.debug(
+            "Profile %s: Processing %d goals",
+            user_info.get("account_name"), len(goals_list)
+        )
         for g in goals_list:
             g_type = g.get("goal_type")
+            _LOGGER.debug(
+                "Profile %s goal: type=%s, value=%s, full_data=%s",
+                user_info.get("account_name"), g_type, g.get("goal_value"), g
+            )
             if not g_type:
+                _LOGGER.warning(
+                    "Skipping goal with missing goal_type for profile %s: %s",
+                    user_info.get("account_name"), g
+                )
                 continue
-            unique = f"{prefix}goal_{g_type}"
-            label = f"{display_prefix}Goal {g_type.title()}"
+            unique_key = f"{prefix}goal_{g_type}"
+            translation_key = f"goal_{g_type}"
             unit: str | None = None
             if g_type == "weight":
                 unit = KG_UNIT
@@ -172,7 +193,7 @@ async def async_setup_entry(
                 unit = "ml"
             entities.append(
                 FeelfitGoalSensor(
-                    coordinator, entry.entry_id, unique, label, unit, g_type, profile_user_id
+                    coordinator, entry.entry_id, unique_key, translation_key, g_type, unit, profile_user_id
                 )
             )
 
@@ -241,6 +262,7 @@ class FeelfitUserSensor(CoordinatorEntity[DataUpdateCoordinator[dict[str, Any]]]
         self,
         coordinator: DataUpdateCoordinator[dict[str, Any]],
         entry_id: str,
+        unique_key: str,
         attr_key: str,
         name: str,
         unit: str | None,
@@ -254,7 +276,7 @@ class FeelfitUserSensor(CoordinatorEntity[DataUpdateCoordinator[dict[str, Any]]]
         self._unit = unit
         self._profile_user_id = profile_user_id
 
-        self._unique_id = f"{entry_id}_{attr_key}_{profile_user_id or 'primary'}"
+        self._unique_id = f"{entry_id}_{unique_key}_{profile_user_id or 'primary'}"
         self._attr_translation_key = attr_key
         self._attr_has_entity_name = True
 
@@ -327,6 +349,7 @@ class FeelfitBirthdaySensor(CoordinatorEntity[DataUpdateCoordinator[dict[str, An
         self,
         coordinator: DataUpdateCoordinator[dict[str, Any]],
         entry_id: str,
+        unique_key: str,
         attr_key: str,
         name: str,
         profile_user_id: str | None = None,
@@ -338,7 +361,7 @@ class FeelfitBirthdaySensor(CoordinatorEntity[DataUpdateCoordinator[dict[str, An
         self._name = name
         self._profile_user_id = profile_user_id
 
-        self._unique_id = f"{entry_id}_{attr_key}_{profile_user_id or 'primary'}"
+        self._unique_id = f"{entry_id}_{unique_key}_{profile_user_id or 'primary'}"
         self._attr_translation_key = attr_key
         self._attr_has_entity_name = True
 
@@ -421,9 +444,9 @@ class FeelfitGoalSensor(CoordinatorEntity[DataUpdateCoordinator[dict[str, Any]]]
         coordinator: DataUpdateCoordinator[dict[str, Any]],
         entry_id: str,
         unique_key: str,
-        name: str,
-        unit: str | None,
+        translation_key: str,
         goal_type: str,
+        unit: str | None,
         profile_user_id: str | None = None,
     ) -> None:
         """Initialize the sensor."""
@@ -431,11 +454,10 @@ class FeelfitGoalSensor(CoordinatorEntity[DataUpdateCoordinator[dict[str, Any]]]
         self._entry_id = entry_id
 
         self._unique_id = f"{entry_id}_{unique_key}_{profile_user_id or 'primary'}"
-        self._name = name
         self._unit = unit
         self._goal_type = goal_type
         self._profile_user_id = profile_user_id
-        self._attr_translation_key = unique_key
+        self._attr_translation_key = translation_key
         self._attr_has_entity_name = True
 
     @property
